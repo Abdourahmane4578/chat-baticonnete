@@ -7,8 +7,8 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3000",
-      "description": "Développement local"
+      "url": "https://chat-baticonnete.onrender.com",
+      "description": "Développement Production"
     }
   ],
   "tags": [
