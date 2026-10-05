@@ -1,0 +1,10 @@
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+module.exports = {
+  PORT: Number(process.env.PORT || 3000),
+  MONGO_URI: process.env.MONGO_URI,
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+};

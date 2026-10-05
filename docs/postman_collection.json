@@ -1,0 +1,117 @@
+{
+  "info": {
+    "_postman_id": "69a6d4ba-8f36-47c6-8ac2-babb302277c1",
+    "name": "Chat Bat API",
+    "description": "Collection REST du microservice Chat Bat. Sélectionner l'environnement Chat Bat - Local. Le service d'authentification externe doit établir l'identité portée par x-user-id.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "x-user-id", "type": "string" },
+      { "key": "value", "value": "{{userId}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Service health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Find or create conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data._id) pm.environment.set('conversationId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"participant_id\": \"{{participantId}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/conversations/find-or-create"
+          }
+        },
+        {
+          "name": "List my conversations",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/conversations" }
+        },
+        {
+          "name": "Get conversation message history",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/conversations/{{conversationId}}/messages?page=1&limit=20" }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data._id) pm.environment.set('messageId', body.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"content\": \"Bonjour depuis Postman\",\n  \"reply_to\": null\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/messages"
+          }
+        },
+        {
+          "name": "Unread count",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/messages/unread-count" }
+        },
+        {
+          "name": "Edit message",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Message modifié depuis Postman\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/messages/{{messageId}}"
+          }
+        },
+        {
+          "name": "Mark message delivered",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/messages/{{messageId}}/delivered" }
+        },
+        {
+          "name": "Mark message read",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/messages/{{messageId}}/read" }
+        },
+        {
+          "name": "Delete message",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/messages/{{messageId}}" }
+        }
+      ]
+    }
+  ]
+}

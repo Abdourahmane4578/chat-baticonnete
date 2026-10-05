@@ -1,0 +1,406 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Chat Bat API",
+    "version": "1.0.0",
+    "description": "API REST du microservice de chat privé 1-to-1. L'authentification complète est gérée par un service externe ou l'API Gateway, qui doit transmettre l'identifiant authentifié dans `x-user-id`."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Développement local"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Conversations" },
+    { "name": "Messages" }
+  ],
+  "security": [{ "UserIdHeader": [] }],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Vérifier l'état du service",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service opérationnel",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/find-or-create": {
+      "post": {
+        "tags": ["Conversations"],
+        "summary": "Créer ou retrouver une conversation privée",
+        "description": "La conversation est unique pour la paire d'identifiants, quel que soit leur ordre. Un utilisateur ne peut pas démarrer une conversation avec lui-même.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FindOrCreateConversationRequest" },
+              "example": { "participant_id": "user-456" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversation créée ou retrouvée",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConversationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/conversations": {
+      "get": {
+        "tags": ["Conversations"],
+        "summary": "Lister les conversations de l'utilisateur connecté",
+        "responses": {
+          "200": {
+            "description": "Liste des conversations, triées de la plus récente à la plus ancienne",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "data"],
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Conversation" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/messages": {
+      "get": {
+        "tags": ["Conversations"],
+        "summary": "Récupérer l'historique paginé d'une conversation",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page de messages dans l'ordre chronologique croissant",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessagePageResponse" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/messages": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Envoyer un message",
+        "description": "Le message est enregistré avec le statut `sent`. Le destinataire est déterminé depuis la conversation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageRequest" },
+              "example": {
+                "conversation_id": "64d4f2fb1a8d8e2be3cde44f",
+                "content": "Salut !",
+                "reply_to": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message créé",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/messages/unread-count": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Compter les messages non lus",
+        "responses": {
+          "200": {
+            "description": "Nombre total de messages non lus pour l'utilisateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "data"],
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total_unread": { "type": "integer", "example": 7 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/messages/{messageId}": {
+      "parameters": [
+        {
+          "name": "messageId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "patch": {
+        "tags": ["Messages"],
+        "summary": "Modifier un message",
+        "description": "Seul l'auteur du message peut le modifier.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Message modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Messages"],
+        "summary": "Supprimer un message",
+        "description": "Suppression logique ; seul l'auteur peut supprimer son message.",
+        "responses": {
+          "200": { "description": "Message supprimé", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/messages/{messageId}/delivered": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Marquer un message comme livré",
+        "parameters": [
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Statut mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/messages/{messageId}/read": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Marquer un message comme lu",
+        "parameters": [
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Statut mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserIdHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-id",
+        "description": "Identifiant établi par le service d'authentification / API Gateway. Ne pas accepter ce header directement d'un client non fiable en production."
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Chat service is healthy" }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "example": "64d4f2fb1a8d8e2be3cde44f" },
+          "participant_one": { "type": "string", "example": "user-123" },
+          "participant_two": { "type": "string", "example": "user-456" },
+          "participants_key": { "type": "string", "example": "user-123:user-456" },
+          "last_message_id": { "type": "string", "nullable": true },
+          "last_message_at": { "type": "string", "format": "date-time", "nullable": true },
+          "unread_count": { "type": "integer" },
+          "other_participant": { "type": "string", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "is_deleted": { "type": "boolean" }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "conversation": { "type": "string" },
+          "conversation_id": { "type": "string" },
+          "sender": { "type": "string" },
+          "recipient": { "type": "string" },
+          "content": { "type": "string" },
+          "message_type": { "type": "string", "enum": ["text", "system"] },
+          "reply_to": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["sent", "delivered", "read"] },
+          "delivered_to": { "type": "array", "items": { "type": "string" } },
+          "read_by": { "type": "array", "items": { "type": "string" } },
+          "edited": { "type": "boolean" },
+          "edited_at": { "type": "string", "format": "date-time", "nullable": true },
+          "is_deleted": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "FindOrCreateConversationRequest": {
+        "type": "object",
+        "required": ["participant_id"],
+        "properties": {
+          "participant_id": { "type": "string", "example": "user-456" }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "required": ["conversation_id", "content"],
+        "properties": {
+          "conversation_id": { "type": "string" },
+          "content": { "type": "string", "minLength": 1 },
+          "reply_to": { "type": "string", "nullable": true }
+        }
+      },
+      "UpdateMessageRequest": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": { "type": "string", "minLength": 1 }
+        }
+      },
+      "ConversationResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": { "$ref": "#/components/schemas/Conversation" }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": { "$ref": "#/components/schemas/Message" }
+        }
+      },
+      "MessagePageResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": {
+            "type": "object",
+            "properties": {
+              "messages": { "type": "array", "items": { "$ref": "#/components/schemas/Message" } },
+              "total": { "type": "integer" },
+              "page": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "totalPages": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["success", "message"],
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "details": { "nullable": true }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Requête invalide",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "Unauthorized": {
+        "description": "Identifiant utilisateur absent",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "Forbidden": {
+        "description": "L'utilisateur n'est pas autorisé à accéder à cette ressource",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "NotFound": {
+        "description": "Ressource introuvable",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      }
+    }
+  },
+  "x-socket-io": {
+    "connection": {
+      "url": "http://localhost:3000",
+      "auth": { "user_id": "user-123" }
+    },
+    "clientEvents": ["join_conversation", "leave_conversation", "typing", "send_message", "message_delivered", "message_read"],
+    "serverEvents": ["presence:update", "presence:connected", "conversation:joined", "typing", "message:new", "message:status"],
+    "documentation": "../FRONTEND_INTEGRATION.md"
+  }
+}
